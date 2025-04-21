@@ -182,7 +182,7 @@ struct FileHandle(Writer):
 
     fn read[
         dtype: DType, origin: Origin[True]
-    ](self, buffer: Span[Scalar[dtype], origin]) raises -> Int64:
+    ](self, buffer: Span[Scalar[dtype], origin]) raises -> Int:
         """Read data from the file into the Span.
 
         Parameters:
@@ -237,9 +237,7 @@ struct FileHandle(Writer):
 
         var err_msg = _OwnedStringRef()
 
-        var bytes_read = external_call[
-            "KGEN_CompilerRT_IO_FileReadToAddress", Int64
-        ](
+        var bytes_read = external_call["KGEN_CompilerRT_IO_FileReadBytes", Int](
             self.handle,
             buffer.unsafe_ptr(),
             len(buffer) * sizeof[dtype](),
