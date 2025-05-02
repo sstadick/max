@@ -229,7 +229,6 @@ struct FileHandle(Writer):
         var twelvth_element = ptr2[1]
         print(eleventh_element, twelvth_element)
         ```
-        .
         """
 
         if not self.handle:
