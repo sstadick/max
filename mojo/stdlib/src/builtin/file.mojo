@@ -185,6 +185,12 @@ struct FileHandle(Writer):
     ](self, buffer: Span[Scalar[dtype], origin]) raises -> Int:
         """Read data from the file into the Span.
 
+        This will read n bytes from the file into the input Span where
+        `0 <= n <= len(buffer)`.
+
+        0 is returned when the file is at EOF, or a 0-sized buffer is
+        passed in.
+
         Parameters:
             dtype: The type that the data will be represented as.
             origin: The origin of the passed in Span.
