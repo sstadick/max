@@ -290,24 +290,32 @@ struct BitSet[size: UInt](Stringable, Writable, Boolable, Sized):
         @parameter
         @always_inline
         fn _intersect[simd_width: Int](offset: Int):
-            # Initialize SIMD vectors to hold multiple words from each bitset
-            var left_vec = SIMD[DType.uint64, simd_width]()
-            var right_vec = SIMD[DType.uint64, simd_width]()
+            # # Initialize SIMD vectors to hold multiple words from each bitset
+            # var left_vec = SIMD[DType.uint64, simd_width]()
+            # var right_vec = SIMD[DType.uint64, simd_width]()
 
-            # Load a batch of words from both bitsets into SIMD vectors
-            @parameter
-            for i in range(simd_width):
-                left_vec[i] = left._words[offset + i]
-                right_vec[i] = right._words[offset + i]
+            # # Load a batch of words from both bitsets into SIMD vectors
+            # @parameter
+            # for i in range(simd_width):
+            #     left_vec[i] = left._words[offset + i]
+            #     right_vec[i] = right._words[offset + i]
+            var left_vec = left._words.unsafe_ptr().offset(offset).load[
+                width=simd_width
+            ]()
+            var right_vec = left._words.unsafe_ptr().offset(offset).load[
+                width=simd_width
+            ]()
 
             # Apply the provided operation (union, intersection, etc.) to the
             # vectors
             var result_vec = func(left_vec, right_vec)
 
-            # Store the results back into the result bitset
-            @parameter
-            for i in range(simd_width):
-                res._words[offset + i] = result_vec[i]
+            # # Store the results back into the result bitset
+            # @parameter
+            # for i in range(simd_width):
+            #     res._words[offset + i] = result_vec[i]
+
+            res._words.unsafe_ptr().store(result_vec)
 
         # Choose between vectorized or scalar implementation based on word count
         @parameter
