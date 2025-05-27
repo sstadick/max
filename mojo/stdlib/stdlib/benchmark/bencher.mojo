@@ -1110,7 +1110,7 @@ struct Bench(Writable, Stringable):
                 try:
                     writer.write(self.pad["-"](metrics[name].max_width, ""))
                 except e:
-                    abort(e)
+                    abort(String(e))
 
             if self.config.verbose_timing:
                 var labels = self.config.VERBOSE_TIMING_LABELS
