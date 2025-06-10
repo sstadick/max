@@ -1104,8 +1104,7 @@ struct Bench(Writable, Stringable):
             writer.write(sep)
             writer.write(self.pad["-"](iters_width, ""))
 
-            for metric in metrics:
-                name = metric[]
+            for name in metrics:
                 writer.write(sep)
                 try:
                     writer.write(self.pad["-"](metrics[name].max_width, ""))
