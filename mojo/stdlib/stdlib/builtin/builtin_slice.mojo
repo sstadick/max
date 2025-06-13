@@ -16,7 +16,7 @@ These are Mojo built-ins, so you don't need to import them.
 """
 
 
-struct Slice(
+struct Slice[*, unsafe_assume_step_of_one: Bool = False](
     Copyable,
     EqualityComparable,
     ExplicitlyCopyable,
@@ -191,7 +191,7 @@ struct Slice(
 
         Out of bounds indices are clamped using the size of the container.
         ```mojo
-        s = slice(20)
+        var s = slice(20)
         i = s.indices(5) # returns (0, 5, 1)
         ```
 
@@ -235,7 +235,7 @@ struct Slice(
 
 
 @always_inline
-fn slice(end: Int) -> Slice:
+fn slice(end: Int) -> Slice[unsafe_assume_step_of_one=True]:
     """Construct slice given the end value.
 
     Args:
@@ -244,11 +244,12 @@ fn slice(end: Int) -> Slice:
     Returns:
         The constructed slice.
     """
-    return Slice(None, end, None)
+    print("Used fn 1")
+    return {None, end, None}
 
 
 @always_inline
-fn slice(start: Int, end: Int) -> Slice:
+fn slice(start: Int, end: Int) -> Slice[unsafe_assume_step_of_one=True]:
     """Construct slice given the start and end values.
 
     Args:
@@ -258,7 +259,8 @@ fn slice(start: Int, end: Int) -> Slice:
     Returns:
         The constructed slice.
     """
-    return Slice(start, end)
+    print("used fn2")
+    return {start, end}
 
 
 @always_inline
@@ -275,4 +277,5 @@ fn slice(
     Returns:
         The constructed slice.
     """
+    print("used fn 3")
     return Slice(start, end, step)

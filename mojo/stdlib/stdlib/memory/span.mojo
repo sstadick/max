@@ -247,6 +247,10 @@ struct Span[
             This function allocates when the step is negative, to avoid a memory
             leak, take ownership of the value.
         """
+        # TODO: Can't use this yet bc `[:]` syntax doesn't know about the unsafe_assume
+        # constrained[
+        #     slc.unsafe_assume_step_of_one, "Slice must have a step size of 1"
+        # ]()
         var start, end, step = slc.indices(len(self))
 
         # TODO: Introduce a new slice type that just has a start+end but no
