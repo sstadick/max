@@ -892,7 +892,7 @@ struct List[T: Copyable & Movable, hint_trivial_type: Bool = False](
         self.capacity = 0
         return ptr
 
-    fn __getitem__(self, slice: Slice) -> Self:
+    fn __getitem__(self, slice: Slice[unsafe_assume_step_of_one=False]) -> Self:
         """Gets the sequence of elements at the specified positions.
 
         Args:
@@ -912,6 +912,13 @@ struct List[T: Copyable & Movable, hint_trivial_type: Bool = False](
             res.append(self[i])
 
         return res^
+
+    fn __getitem__(
+        self, slice: Slice[unsafe_assume_step_of_one=True]
+    ) -> Span[T, __origin_of(self)]:
+        var start, end, step = slice.indices(len(self))
+        print("Called with:", start, end, step, slice.unsafe_assume_step_of_one)
+        return Span(self)[slice]
 
     fn __getitem__[I: Indexer](ref self, idx: I) -> ref [self] T:
         """Gets the list element at the given index.

@@ -573,7 +573,7 @@ struct Counter[V: KeyElement](Boolable, Copyable, Defaultable, Movable, Sized):
             return a < b
 
         sort[comparator](items)
-        return items[: Int(n)]
+        return List(items[: Int(n)])
 
     fn elements(self) -> List[V]:
         """Return an iterator over elements repeating each as many times as its
