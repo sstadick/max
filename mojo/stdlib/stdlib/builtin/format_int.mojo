@@ -331,8 +331,7 @@ fn _try_write_int[
     # Create a buffer to store the formatted value
 
     # Stack allocate enough bytes to store any formatted 64-bit integer
-    # TODO: use a dynamic size when #2194 is resolved
-    alias CAPACITY: Int = 64 + 1  # +1 for storing NUL terminator.
+    alias CAPACITY: Int = dtype.bitwidth() + 1  # +1 for storing NUL terminator.
 
     var buf = InlineArray[UInt8, CAPACITY](uninitialized=True)
 

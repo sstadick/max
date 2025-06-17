@@ -745,6 +745,17 @@ fn max_finite[dtype: DType]() -> Scalar[dtype]:
         return 9223372036854775807
     elif dtype is DType.uint64:
         return 18446744073709551615
+    elif dtype is DType.int128:
+        return 170141183460469231731687303715884105727
+    elif dtype is DType.uint128:
+        # TODO: Creating a SIMD from an IntLiteral goes through a si128.
+        return ~Scalar[dtype](0)
+    elif dtype is DType.int256:
+        # TODO: Creating a SIMD from an IntLiteral goes through a si128.
+        return (Scalar[dtype](1) << 255) - 1
+    elif dtype is DType.uint256:
+        # TODO: Creating a SIMD from an IntLiteral goes through a si128.
+        return ~Scalar[dtype](0)
     elif dtype is DType.float8_e4m3fn:
         return 448
     elif dtype is DType.float8_e4m3fnuz:
@@ -798,6 +809,11 @@ fn min_finite[dtype: DType]() -> Scalar[dtype]:
         dtype is DType.index and bitwidthof[DType.index]() == 64
     ):
         return -9223372036854775808
+    elif dtype is DType.int128:
+        return -170141183460469231731687303715884105728
+    elif dtype is DType.int256:
+        # TODO: Creating a SIMD from an IntLiteral goes through a si128.
+        return Scalar[dtype](1) << 255
     elif dtype.is_floating_point():
         return -max_finite[dtype]()
     elif dtype is DType.bool:

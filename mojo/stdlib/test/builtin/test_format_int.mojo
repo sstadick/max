@@ -26,6 +26,41 @@ fn test_format_int() raises:
     assert_equal(_format_int[DType.index](-123, 10), "-123")
     assert_equal(_format_int[DType.index](-999_999_999, 10), "-999999999")
 
+    # Max and Min values for wide types
+    assert_equal(
+        _format_int(UInt256.MAX, 10),
+        "115792089237316195423570985008687907853269984665640564039457584007913129639935",
+    )
+    assert_equal(
+        _format_int(Int256.MAX, 10),
+        "57896044618658097711785492504343953926634992332820282019728792003956564819967",
+    )
+    assert_equal(
+        _format_int(UInt256.MIN, 10),
+        "0",
+    )
+    assert_equal(
+        _format_int(Int256.MIN, 10),
+        "-57896044618658097711785492504343953926634992332820282019728792003956564819968",
+    )
+
+    assert_equal(
+        _format_int(Int128.MAX, 10),
+        "170141183460469231731687303715884105727",
+    )
+    assert_equal(
+        _format_int(UInt128.MAX, 10),
+        "340282366920938463463374607431768211455",
+    )
+    assert_equal(
+        _format_int(UInt128.MIN, 10),
+        "0",
+    )
+    assert_equal(
+        _format_int(Int128.MIN, 10),
+        "-170141183460469231731687303715884105728",
+    )
+
     #
     # Max and min i64 values in base 10
     #
