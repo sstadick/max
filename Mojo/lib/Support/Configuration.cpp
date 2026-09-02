@@ -135,6 +135,11 @@ StringRef MojoConfig::getLSPServerPath() {
                  "bin/mojo-lsp-server");
 }
 
+StringRef MojoConfig::getLSPSourceRoot() {
+  return getPath(STRINGIFY_MOJO_CONFIG(".lsp_source_root"),
+                 "share/mojo/sources");
+}
+
 StringRef MojoConfig::getMBlackPath() {
   return getPath(STRINGIFY_MOJO_CONFIG(".mblack_path"), "bin/mblack");
 }

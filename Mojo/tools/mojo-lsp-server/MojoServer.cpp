@@ -33,6 +33,7 @@
 #include "Mojo/MojoTooling/PublicASTDecl.h"
 #include "Mojo/MojoTooling/REPLPythonExprUtils.h"
 #include "Mojo/Support/CompilerProfiling.h"
+#include "Mojo/Support/Configuration.h"
 #include "Mojo/ToolCommon/CompilationOptions.h"
 #include "Mojo/ToolCommon/KGENPasses.h"
 #include "Support/Config.h"
@@ -52,6 +53,7 @@
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/LSP/Logging.h"
 #include "llvm/Support/LSP/Protocol.h"
+#include "llvm/Support/Path.h"
 #include "llvm/Support/ToolOutputFile.h"
 #include <chrono>
 #include <optional>
@@ -767,9 +769,11 @@ MojoDocument::MojoDocument(Kind kind, ArrayRef<lsp::URIForFile> uris,
                            int64_t version,
                            SendDiagnosticsFnRef sendDiagnosticsFn,
                            AsyncRT::CPUDevice &cpuDevice,
-                           ArrayRef<std::string> includeDirs)
+                           ArrayRef<std::string> includeDirs,
+                           ArrayRef<std::string> sourceRoots)
     : kind(kind), uris(uris), version(version),
       sendDiagnosticsFn(sendDiagnosticsFn), cpuDevice(cpuDevice),
+      sourceRoots(sourceRoots.begin(), sourceRoots.end()),
       // At construction, the document is in a ready state - no tasks are
       // currently enqueued.
       currentTaskChain(cpuDevice.getReadyChain().copy()) {
@@ -999,6 +1003,37 @@ static std::optional<lsp::URIForFile> getURIFromPath(StringRef path) {
   lsp::Logger::error("Failed to create URI for file: {0}",
                      llvm::toString(uri.takeError()));
   return std::nullopt;
+}
+
+/// Returns a URI only when `path` identifies a source file on disk.
+static std::optional<lsp::URIForFile> getURIFromExistingPath(StringRef path) {
+  llvm::SmallString<256> absolutePath(path);
+  if (llvm::sys::fs::make_absolute(absolutePath))
+    return std::nullopt;
+  llvm::sys::path::remove_dots(absolutePath, /*remove_dot_dot=*/true);
+  if (!llvm::sys::fs::is_regular_file(absolutePath))
+    return std::nullopt;
+  return getURIFromPath(absolutePath);
+}
+
+/// Resolves a source path embedded in a precompiled package. Relative paths
+/// are interpreted below each configured source root before falling back to
+/// the server's current working directory for monorepo development.
+static std::optional<lsp::URIForFile>
+getURIFromSourcePath(StringRef path, ArrayRef<std::string> sourceRoots) {
+  if (llvm::sys::path::is_absolute(path))
+    return getURIFromExistingPath(path);
+
+  for (StringRef sourceRoot : sourceRoots) {
+    if (sourceRoot.empty())
+      continue;
+    llvm::SmallString<256> candidate(sourceRoot);
+    llvm::sys::path::append(candidate, path);
+    if (auto uri = getURIFromExistingPath(candidate))
+      return uri;
+  }
+
+  return getURIFromExistingPath(path);
 }
 
 std::optional<lsp::URIForFile> MojoDocument::getURIFromLoc(SMLoc loc) {
@@ -1262,7 +1297,8 @@ lsp::CompletionList MojoDocument::onCodeCompletionSync(SMLoc completeLoc) {
 //===----------------------------------------------------------------------===//
 
 static std::optional<lsp::Location>
-getLocationFromBytecodeDecl(const Symbol &symbol) {
+getLocationFromBytecodeDecl(const Symbol &symbol,
+                            ArrayRef<std::string> sourceRoots) {
   if (!symbol.declRef->isLoadedFromBytecode())
     return std::nullopt;
 
@@ -1280,7 +1316,8 @@ getLocationFromBytecodeDecl(const Symbol &symbol) {
   if (filename.empty() || filename == "<unknown>")
     return std::nullopt;
 
-  std::optional<lsp::URIForFile> uri = getURIFromPath(filename);
+  std::optional<lsp::URIForFile> uri =
+      getURIFromSourcePath(filename, sourceRoots);
   if (!uri)
     return std::nullopt;
 
@@ -1318,7 +1355,7 @@ std::vector<lsp::Location> MojoDocument::onDefinitionSync(SMLoc loc) {
       continue;
     }
 
-    if (auto location = getLocationFromBytecodeDecl(*symbol))
+    if (auto location = getLocationFromBytecodeDecl(*symbol, sourceRoots))
       locations.push_back(std::move(*location));
   }
   return locations;
@@ -1986,9 +2023,10 @@ MojoTextDocument::MojoTextDocument(const lsp::URIForFile &uri,
                                    SendDiagnosticsFnRef sendDiagnosticsFn,
                                    AsyncRT::CPUDevice &cpuDevice,
                                    ArrayRef<std::string> includeDirs,
+                                   ArrayRef<std::string> sourceRoots,
                                    bool checkDocstringCodeBlocks)
     : MojoDocument(Kind::kTextDocument, uri, version, sendDiagnosticsFn,
-                   cpuDevice, includeDirs),
+                   cpuDevice, includeDirs, sourceRoots),
       contents(std::move(contents)) {
   docStrings.checkCodeBlocks = checkDocstringCodeBlocks;
   // We add the main doc to the SourceMgr here to ensure it's considered the
@@ -2119,9 +2157,9 @@ MojoNotebookDocument::MojoNotebookDocument(
     ArrayRef<lsp::NotebookCell> cellInfos,
     ArrayRef<lsp::TextDocumentItem> cellDocuments,
     SendDiagnosticsFnRef sendDiagnosticsFn, AsyncRT::CPUDevice &cpuDevice,
-    ArrayRef<std::string> includeDirs)
+    ArrayRef<std::string> includeDirs, ArrayRef<std::string> sourceRoots)
     : MojoDocument(Kind::kNotebookDocument, notebookAndCellURIs, version,
-                   sendDiagnosticsFn, cpuDevice, includeDirs) {
+                   sendDiagnosticsFn, cpuDevice, includeDirs, sourceRoots) {
   for (unsigned i = 0, e = cellInfos.size(); i < e; ++i) {
     if (cellInfos[i].kind != lsp::NotebookCellKind::Code)
       continue;
@@ -2336,7 +2374,8 @@ struct MojoServer::Impl {
 
   Impl(ContextRef ctx, bool waitOnShutdown,
        llvm::lsp::MessageHandler &messageHandler,
-       ArrayRef<std::string> includeDirs, bool checkDocstringCodeBlocks = false)
+       ArrayRef<std::string> includeDirs, ArrayRef<std::string> sourceRoots,
+       bool checkDocstringCodeBlocks = false)
       : ctx(ctx.copy()),
         lspTelemetryContext(*ctx->get<M::Telemetry::TelemetryContext>()),
         waitOnShutdown(waitOnShutdown), messageHandler(messageHandler),
@@ -2345,6 +2384,7 @@ struct MojoServer::Impl {
                 .outgoingNotification<llvm::lsp::PublishDiagnosticsParams>(
                     "textDocument/publishDiagnostics")),
         progressMgr(messageHandler), includeDirs(includeDirs),
+        sourceRoots(sourceRoots),
         checkDocstringCodeBlocks(checkDocstringCodeBlocks) {}
 
   /// Begin the shutdown process for the server.
@@ -2451,7 +2491,7 @@ struct MojoServer::Impl {
     // Create a new document.
     it->second = MojoTextDocumentRef::create(
         uri, std::move(contents), version, sendDiagnosticsFn, cpuDevice,
-        includeDirs, checkDocstringCodeBlocks);
+        includeDirs, sourceRoots, checkDocstringCodeBlocks);
 
     // Clear pending contents since they're now being parsed.
     pendingDocContents.erase(uri.file());
@@ -2514,6 +2554,9 @@ struct MojoServer::Impl {
   /// Additional directories to append to the search paths list.
   std::vector<std::string> includeDirs;
 
+  /// Roots used to resolve source paths embedded in precompiled packages.
+  std::vector<std::string> sourceRoots;
+
   /// When true, parse and type-check code blocks in doc strings.
   bool checkDocstringCodeBlocks = false;
 
@@ -2551,6 +2594,7 @@ ErrorOr<MojoServer>
 MojoServer::create(bool singleThreaded, bool waitOnShutdown,
                    llvm::lsp::MessageHandler &messageHandler,
                    ArrayRef<std::string> includeDirs,
+                   ArrayRef<std::string> sourceRoots,
                    bool checkDocstringCodeBlocks) {
   ErrorOr<ContextRef> ctxOr = Init::createContext(
       "mojo-lsp-server", Init::Options().withCPUDeviceOptions(
@@ -2559,9 +2603,16 @@ MojoServer::create(bool singleThreaded, bool waitOnShutdown,
                                  .withMainWillNotDonate()));
   if (ctxOr.isError())
     return ctxOr.takeError();
-  auto implPtr =
-      std::make_unique<Impl>(ctxOr->copy(), waitOnShutdown, messageHandler,
-                             includeDirs, checkDocstringCodeBlocks);
+  SmallVector<std::string> allSourceRoots(sourceRoots.begin(),
+                                          sourceRoots.end());
+  StringRef configuredSourceRoot =
+      KGEN::MojoConfig::fromContext(ctxOr->copy()).getLSPSourceRoot();
+  if (llvm::sys::fs::is_directory(configuredSourceRoot))
+    allSourceRoots.push_back(configuredSourceRoot.str());
+
+  auto implPtr = std::make_unique<Impl>(
+      ctxOr->copy(), waitOnShutdown, messageHandler, includeDirs,
+      allSourceRoots, checkDocstringCodeBlocks);
   // Initialize the debouncer before moving the impl.
   implPtr->initDebouncer(implPtr->lspTelemetryContext, implPtr->progressMgr);
   MojoServer server(std::move(implPtr));
@@ -2800,7 +2851,7 @@ void MojoServer::addNotebookDocument(
   // Create a new document.
   file = MojoNotebookDocumentRef::create(docURIs, version, cells, cellDocuments,
                                          impl->sendDiagnosticsFn, cpuDevice,
-                                         impl->includeDirs);
+                                         impl->includeDirs, impl->sourceRoots);
   for (const lsp::TextDocumentItem &cell : cellDocuments)
     impl->notebookCellToFile[cell.uri.file()] = file.copy();
 

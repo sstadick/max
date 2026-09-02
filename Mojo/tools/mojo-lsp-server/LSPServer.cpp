@@ -281,16 +281,15 @@ void LSPServer::onNotebookDocumentDidChange(
 // Entry Point
 //===----------------------------------------------------------------------===//
 
-mlir::LogicalResult
-M::KGEN::LIT::runMojoLSPServer(JSONTransport &transport, bool singleThreaded,
-                               bool waitOnShutdown,
-                               ArrayRef<std::string> includeDirs,
-                               std::unique_ptr<KGEN::TraceProfiler> profiler,
-                               bool checkDocstringCodeBlocks) {
+mlir::LogicalResult M::KGEN::LIT::runMojoLSPServer(
+    JSONTransport &transport, bool singleThreaded, bool waitOnShutdown,
+    ArrayRef<std::string> includeDirs, ArrayRef<std::string> sourceRoots,
+    std::unique_ptr<KGEN::TraceProfiler> profiler,
+    bool checkDocstringCodeBlocks) {
   MessageHandler messageHandler(transport);
   ErrorOr<MojoServer> serverOr =
       MojoServer::create(singleThreaded, waitOnShutdown, messageHandler,
-                         includeDirs, checkDocstringCodeBlocks);
+                         includeDirs, sourceRoots, checkDocstringCodeBlocks);
   if (serverOr.isError()) {
     auto error = llvm::make_error<llvm::StringError>(
         serverOr.getError(), llvm::inconvertibleErrorCode());
