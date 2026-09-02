@@ -55,6 +55,7 @@ public:
   static ErrorOr<MojoServer> create(bool singleThreaded, bool waitOnShutdown,
                                     llvm::lsp::MessageHandler &messageHandler,
                                     ArrayRef<std::string> includeDirs,
+                                    ArrayRef<std::string> sourceRoots,
                                     bool checkDocstringCodeBlocks = false);
 
   // Get the telemetry context for this server.

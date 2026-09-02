@@ -1,4 +1,4 @@
-load("//bazel:api.bzl", "mojo_library", "pkg_files")
+load("//bazel:api.bzl", "mojo_library", "pkg_files", "strip_prefix")
 
 # gazelle:default_visibility //visibility:public
 
@@ -9,6 +9,15 @@ exports_files(["__init__.mojo"])
 filegroup(
     name = "std_srcs",
     srcs = glob(["**/*.mojo"]),
+)
+
+# Keep the paths recorded in std.mojoc intact so the language server can map
+# bytecode declarations back to installed source files.
+pkg_files(
+    name = "lsp_sources",
+    srcs = [":std_srcs"],
+    prefix = "share/mojo/sources/Mojo/stdlib/std",
+    strip_prefix = strip_prefix.from_pkg(),
 )
 
 # Base stdlib sources excluding files that plugins may replace.

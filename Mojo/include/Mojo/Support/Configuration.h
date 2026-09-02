@@ -99,6 +99,9 @@ public:
   /// Return the path to the Mojo LSP server.
   StringRef getLSPServerPath();
 
+  /// Return the root containing source trees for precompiled Mojo packages.
+  StringRef getLSPSourceRoot();
+
   /// Return the path to the mblack executable in the mojo install.
   StringRef getMBlackPath();
 

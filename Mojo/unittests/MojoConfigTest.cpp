@@ -69,3 +69,25 @@ TEST(MojoConfigTest, GetPluginPathsSkipsEmptyEntries) {
   EXPECT_EQ(paths[0], "/usr/lib/plugin_a.so");
   EXPECT_EQ(paths[1], "/usr/lib/plugin_b.so");
 }
+
+TEST(MojoConfigTest, GetLSPSourceRootFromPackageRoot) {
+  auto ctx = RCRef<Context>::take(new Context());
+  ctx->set(std::make_unique<Config>());
+  Config::setGlobalValue("mojo-max.package_root", "/opt/mojo");
+  MojoConfig cfg = MojoConfig::fromContext(ctx);
+
+  std::string sourceRoot = cfg.getLSPSourceRoot().str();
+  Config::unsetGlobalValue("mojo-max.package_root");
+  EXPECT_EQ(sourceRoot, "/opt/mojo/share/mojo/sources");
+}
+
+TEST(MojoConfigTest, GetLSPSourceRootOverride) {
+  auto ctx = RCRef<Context>::take(new Context());
+  ctx->set(std::make_unique<Config>());
+  Config::setGlobalValue("mojo-max.lsp_source_root", "/custom/mojo-sources");
+  MojoConfig cfg = MojoConfig::fromContext(ctx);
+
+  std::string sourceRoot = cfg.getLSPSourceRoot().str();
+  Config::unsetGlobalValue("mojo-max.lsp_source_root");
+  EXPECT_EQ(sourceRoot, "/custom/mojo-sources");
+}

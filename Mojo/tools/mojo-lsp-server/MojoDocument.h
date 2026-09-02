@@ -284,8 +284,8 @@ public:
 protected:
   MojoDocument(Kind kind, ArrayRef<llvm::lsp::URIForFile> uris, int64_t version,
                SendDiagnosticsFnRef sendDiagnosticsFn,
-               AsyncRT::CPUDevice &cpuDevice,
-               ArrayRef<std::string> includeDirs);
+               AsyncRT::CPUDevice &cpuDevice, ArrayRef<std::string> includeDirs,
+               ArrayRef<std::string> sourceRoots);
 
   /// A collection of MLIR and Mojo related entities used to invoke the parser.
   /// Its lifetime is tied to that of the AST objects gotten from the parser.
@@ -411,6 +411,9 @@ private:
 
   /// The cpuDevice used when parsing the file.
   AsyncRT::CPUDevice &cpuDevice;
+
+  /// Roots used to resolve source paths embedded in precompiled packages.
+  SmallVector<std::string> sourceRoots;
 
   /// A flag indicating if this document version has been invalidated.
   std::atomic<bool> isInvalidated = false;
@@ -558,6 +561,7 @@ public:
                    int64_t version, SendDiagnosticsFnRef sendDiagnosticsFn,
                    AsyncRT::CPUDevice &cpuDevice,
                    ArrayRef<std::string> includeDirs,
+                   ArrayRef<std::string> sourceRoots,
                    bool checkDocstringCodeBlocks = false);
   MojoTextDocument(const MojoDocument &) = delete;
   MojoTextDocument &operator=(const MojoDocument &) = delete;
@@ -670,7 +674,8 @@ public:
                        ArrayRef<llvm::lsp::TextDocumentItem> cellDocuments,
                        SendDiagnosticsFnRef sendDiagnosticsFn,
                        AsyncRT::CPUDevice &cpuDevice,
-                       ArrayRef<std::string> includeDirs);
+                       ArrayRef<std::string> includeDirs,
+                       ArrayRef<std::string> sourceRoots);
   MojoNotebookDocument(const MojoDocument &) = delete;
   MojoNotebookDocument &operator=(const MojoDocument &) = delete;
 

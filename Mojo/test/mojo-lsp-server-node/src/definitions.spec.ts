@@ -1,4 +1,5 @@
 import assert from "assert";
+import { readFile } from "fs/promises";
 import { fileURLToPath } from "url";
 import * as path from "path";
 import { Document, LanguageServer } from "./harness";
@@ -117,6 +118,44 @@ def main():
     } finally {
       await importServer.stop();
     }
+  });
+
+  it("should find definitions for the standard library", async () => {
+    const doc = new Document(
+      server,
+      "test:///test.mojo",
+      `
+def main():
+  var values = List[Int]()
+  values.append(1)
+`
+    );
+    await doc.open();
+
+    const locations = await doc.definition(doc.findLastPosition("append"));
+    assert.ok(locations);
+    assert.strictEqual(locations.length, 1);
+
+    const filePath = fileURLToPath(locations[0].uri);
+    assert.ok(path.isAbsolute(filePath));
+    assert.ok(
+      filePath.endsWith(path.join("std", "collections", "list.mojo")),
+      `expected stdlib definition, got: ${locations[0].uri}`
+    );
+
+    const source = await readFile(filePath, "utf-8");
+    const definitionLine = source.split(/\r?\n/)[locations[0].range.start.line];
+    assert.strictEqual(
+      locations[0].range.start.line,
+      locations[0].range.end.line
+    );
+    assert.strictEqual(
+      definitionLine.slice(
+        locations[0].range.start.character,
+        locations[0].range.end.character
+      ),
+      "append"
+    );
   });
 
   afterEach("stop language server", async () => {

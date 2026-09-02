@@ -106,6 +106,12 @@ int main(int argc, char **argv) {
                      "resolve imported modules in a document"),
       llvm::cl::cat(category),
   };
+  llvm::cl::list<std::string> sourceRoots{
+      "source-root",
+      llvm::cl::desc("Append a root used to resolve source paths embedded in "
+                     "precompiled Mojo packages"),
+      llvm::cl::cat(category),
+  };
   llvm::cl::opt<bool> checkDocstrings{
       "check-docstrings",
       llvm::cl::desc(
@@ -168,7 +174,7 @@ int main(int argc, char **argv) {
   // Start the server.
   // When testing we use a single thread to provide deterministic output.
   return failed(runMojoLSPServer(transport, /*singleThreaded=*/mojoTest,
-                                 waitOnShutdown, includeDirs,
+                                 waitOnShutdown, includeDirs, sourceRoots,
                                  std::move(traceProfiler),
                                  /*checkDocstringCodeBlocks=*/checkDocstrings));
 }

@@ -1,3 +1,4 @@
+load("@aspect_bazel_lib//lib:copy_to_directory.bzl", "copy_to_directory")
 load("@aspect_rules_ts//ts:defs.bzl", "ts_project")
 load("@mojo-lsp-server-node-tests//:defs.bzl", "npm_link_all_packages")
 load(":mocha.bzl", "mocha_test")
@@ -10,11 +11,24 @@ mocha_test(
     name = "test",
     srcs = [":compile"],
     data = [
+        ":pixi_prefix",
         ":test_data",
         "//Mojo/tools/mojo-lsp-server",
     ],
     env = {
+        "MODULAR_MOJO_MAX_PACKAGE_ROOT": "$(rootpath :pixi_prefix)",
         "MODULAR_MOJO_MAX_LSP_SERVER_PATH": "$(rootpath //Mojo/tools/mojo-lsp-server:mojo-lsp-server)",
+    },
+)
+
+# Model a Pixi prefix while preserving the workspace-relative path recorded in
+# std.mojoc beneath the language server's default install source root.
+copy_to_directory(
+    name = "pixi_prefix",
+    srcs = ["//Mojo/stdlib/std:std_srcs"],
+    include_srcs_patterns = ["Mojo/stdlib/std/collections/list.mojo"],
+    replace_prefixes = {
+        "Mojo": "share/mojo/sources/Mojo",
     },
 )
 

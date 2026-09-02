@@ -32,6 +32,7 @@ namespace M::KGEN::LIT {
 mlir::LogicalResult
 runMojoLSPServer(llvm::lsp::JSONTransport &transport, bool singleThreaded,
                  bool waitOnShutdown, ArrayRef<std::string> includeDirs,
+                 ArrayRef<std::string> sourceRoots,
                  std::unique_ptr<KGEN::TraceProfiler> profiler,
                  bool checkDocstringCodeBlocks = false);
 } // namespace M::KGEN::LIT
