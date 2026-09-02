@@ -119,6 +119,30 @@ def main():
     }
   });
 
+  it("should find definitions for the standard library", async () => {
+    const doc = new Document(
+      server,
+      "test:///test.mojo",
+      `
+def main():
+  var values = List[Int]()
+  values.append(1)
+`
+    );
+    await doc.open();
+
+    const locations = await doc.definition(doc.findLastPosition("append"));
+    assert.ok(locations);
+    assert.strictEqual(locations.length, 1);
+
+    const filePath = fileURLToPath(locations[0].uri);
+    assert.ok(path.isAbsolute(filePath));
+    assert.ok(
+      filePath.endsWith(path.join("std", "collections", "list.mojo")),
+      `expected stdlib definition, got: ${locations[0].uri}`
+    );
+  });
+
   afterEach("stop language server", async () => {
     await server.stop();
   });

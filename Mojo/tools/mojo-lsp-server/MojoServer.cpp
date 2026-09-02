@@ -983,6 +983,24 @@ void MojoDocument::dumpParsedIR() {
 // MojoDocument: Document Utilities
 //===----------------------------------------------------------------------===//
 
+static std::optional<lsp::URIForFile> getURIFromPath(StringRef path) {
+  // URIForFile::fromFile requires an absolute path.
+  llvm::SmallString<256> absPath(path);
+  if (std::error_code ec = llvm::sys::fs::make_absolute(absPath)) {
+    lsp::Logger::error("Failed to resolve absolute file path: {0}",
+                       ec.message());
+    return std::nullopt;
+  }
+
+  llvm::Expected<lsp::URIForFile> uri =
+      lsp::URIForFile::fromFile(absPath, "file");
+  if (uri)
+    return *uri;
+  lsp::Logger::error("Failed to create URI for file: {0}",
+                     llvm::toString(uri.takeError()));
+  return std::nullopt;
+}
+
 std::optional<lsp::URIForFile> MojoDocument::getURIFromLoc(SMLoc loc) {
   int bufferId = sourceMgr.FindBufferContainingLoc(loc);
   if (bufferId == 0)
@@ -992,22 +1010,8 @@ std::optional<lsp::URIForFile> MojoDocument::getURIFromLoc(SMLoc loc) {
   if (containsLocation(loc))
     return getURIFromContainedLoc(loc);
 
-  // URIForFile::fromFile requires an absolute path.
-  llvm::SmallString<256> absPath(
+  return getURIFromPath(
       sourceMgr.getBufferInfo(bufferId).Buffer->getBufferIdentifier());
-  if (std::error_code ec = llvm::sys::fs::make_absolute(absPath)) {
-    lsp::Logger::error("Failed to resolve absolute path for include file: {0}",
-                       ec.message());
-    return std::nullopt;
-  }
-
-  llvm::Expected<lsp::URIForFile> fileForLoc =
-      lsp::URIForFile::fromFile(absPath, "file");
-  if (fileForLoc)
-    return *fileForLoc;
-  lsp::Logger::error("Failed to create URI for include file: {0}",
-                     llvm::toString(fileForLoc.takeError()));
-  return std::nullopt;
 }
 
 std::optional<lsp::Location>
@@ -1257,6 +1261,36 @@ lsp::CompletionList MojoDocument::onCodeCompletionSync(SMLoc completeLoc) {
 // MojoDocument: Definitions and References
 //===----------------------------------------------------------------------===//
 
+static std::optional<lsp::Location>
+getLocationFromBytecodeDecl(const Symbol &symbol) {
+  if (!symbol.declRef->isLoadedFromBytecode())
+    return std::nullopt;
+
+  Operation *op = symbol.declRef.getIfOperation();
+  if (!op)
+    return std::nullopt;
+
+  // A bytecode declaration may not have an SMLoc when its original source is
+  // unavailable. Its serialized operation still retains source coordinates.
+  FileLineColLoc fileLoc = op->getLoc()->findInstanceOf<FileLineColLoc>();
+  if (!fileLoc || fileLoc.getLine() == 0 || fileLoc.getColumn() == 0)
+    return std::nullopt;
+
+  StringRef filename = fileLoc.getFilename().getValue();
+  if (filename.empty() || filename == "<unknown>")
+    return std::nullopt;
+
+  std::optional<lsp::URIForFile> uri = getURIFromPath(filename);
+  if (!uri)
+    return std::nullopt;
+
+  lsp::Position start(static_cast<int>(fileLoc.getLine() - 1),
+                      static_cast<int>(fileLoc.getColumn() - 1));
+  lsp::Position end(start.line, start.character +
+                                    static_cast<int>(symbol.identifier.size()));
+  return lsp::Location(*uri, lsp::Range(start, end));
+}
+
 void MojoDocument::onDefinition(
     const lsp::URIForFile &uri, const lsp::Position &pos,
     LSPResponder<std::vector<lsp::Location>> responder) {
@@ -1278,9 +1312,15 @@ std::vector<lsp::Location> MojoDocument::onDefinitionSync(SMLoc loc) {
     return {};
 
   std::vector<lsp::Location> locations;
-  for (const Symbol *symbol : symbolRef->symbols)
-    if (auto uri = getURIFromLoc(symbol->range.Start))
+  for (const Symbol *symbol : symbolRef->symbols) {
+    if (auto uri = getURIFromLoc(symbol->range.Start)) {
       locations.emplace_back(*uri, lsp::Range(getSourceMgr(), symbol->range));
+      continue;
+    }
+
+    if (auto location = getLocationFromBytecodeDecl(*symbol))
+      locations.push_back(std::move(*location));
+  }
   return locations;
 }
 
