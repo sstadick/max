@@ -65,6 +65,10 @@ public:
   ModuleLoader(SharedState &shared);
   ~ModuleLoader();
 
+  /// Read a file relative to the source at loc and record it as an input.
+  /// Returns a binary KGEN string, or a null attribute after a diagnostic.
+  mlir::StringAttr readEmbeddedFile(ASTDecl &scope, SMLoc loc, StringRef path);
+
   /// The working directory that imports from `importBufferFileId` search, or
   /// an empty path for a null buffer id, which requests none.
   std::filesystem::path workingDirectoryFor(unsigned importBufferFileId) const;

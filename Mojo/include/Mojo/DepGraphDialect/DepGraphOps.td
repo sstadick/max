@@ -94,6 +94,8 @@ def DepGraph_ModuleNodeOp : DepGraphOp<"module"> {
     - `path` (optional): filesystem path of the source file or package root.
     - `content_hash` (optional): lowercase hex xxh3-64 digest of the source
       file content at the time the module was parsed.
+    - `embedded_files` (optional): absolute asset paths mapped to the hashes
+      of the bytes read when this module was parsed.
 
     Operands:
     - `deps` (variadic): handles of modules that this module directly imports.
@@ -111,6 +113,7 @@ def DepGraph_ModuleNodeOp : DepGraphOp<"module"> {
     SymbolNameAttr:$sym_name,
     OptionalAttr<StrAttr>:$path,
     OptionalAttr<StrAttr>:$content_hash,
+    OptionalAttr<DictionaryAttr>:$embedded_files,
     Variadic<DepGraph_NodeType>:$deps
   );
   let results = (outs DepGraph_NodeType:$handle);

@@ -213,6 +213,11 @@ struct ModuleStore {
   /// Import edges: importer decl -> set of directly-imported module decls.
   DenseMap<ASTDecl *, llvm::SetVector<ASTDecl *>> depEdges;
 
+  /// One snapshot per asset per compilation. Keep dependency paths lexical so
+  /// retargeting a symlink is visible to the next compilation.
+  llvm::StringMap<mlir::StringAttr> embeddedFileContents;
+  DenseMap<ASTDecl *, llvm::SetVector<mlir::StringAttr>> embeddedFilePaths;
+
   /// Every origin, owned here so it outlives the states pointing at it.
   llvm::SmallVector<std::unique_ptr<ModuleOrigin>> originAllocations;
 

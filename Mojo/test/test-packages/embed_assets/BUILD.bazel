@@ -1,0 +1,17 @@
+load("@bazel_skylib//rules:build_test.bzl", "build_test")
+load("//bazel:api.bzl", "mojo_library")
+
+mojo_library(
+    name = "theme",
+    srcs = ["__init__.mojo"],
+    additional_compiler_inputs = ["theme.css"],
+    deps = ["@mojo//:std"],
+)
+
+build_test(
+    name = "embed_assets_test",
+    targets = [
+        ":theme",
+        ":theme.docs",
+    ],
+)

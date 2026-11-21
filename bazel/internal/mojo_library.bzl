@@ -68,7 +68,7 @@ def mojo_library(
         stability_doc_url: Forwarded to `mojo_docs`
         testonly: Forwarded to `mojo_library`
         visibility: Forwarded to all subtargets
-        additional_compiler_inputs: Forwarded to `mojo_library`
+        additional_compiler_inputs: Files available to library compilation and documentation generation.
         use_production_compiler_for_asan:
             Use a production build of Mojo to build this target when in asan mode.
             This is a speed optimization if the coverage is not worth the slowdown.
@@ -109,6 +109,7 @@ def mojo_library(
         mojo_doc(
             name = name + ".docs",
             srcs = srcs,
+            additional_compiler_inputs = additional_compiler_inputs,
             deps = deps,
             validate_missing_docs = validate_missing_docs,
             docs_base_path = docs_base_path,
