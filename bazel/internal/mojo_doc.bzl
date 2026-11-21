@@ -31,7 +31,7 @@ def _mojo_doc_implementation(ctx):
     mojodoc_output = ctx.actions.declare_file(ctx.label.name + ".mojodoc.json")
     ctx.actions.run(
         executable = mojo_toolchain.mojo,
-        inputs = depset(ctx.files.srcs, transitive = [transitive_mojodeps]),
+        inputs = depset(ctx.files.srcs + ctx.files.additional_compiler_inputs, transitive = [transitive_mojodeps]),
         tools = mojo_toolchain.all_tools,
         outputs = [mojodoc_output],
         mnemonic = "MojoDoc",
@@ -80,6 +80,10 @@ def _mojo_doc_implementation(ctx):
 mojo_doc = rule(
     implementation = _mojo_doc_implementation,
     attrs = {
+        "additional_compiler_inputs": attr.label_list(
+            allow_files = True,
+            doc = "Additional files read while compiling the documented sources.",
+        ),
         "srcs": attr.label_list(
             allow_empty = False,
             allow_files = MOJO_EXTENSIONS,
