@@ -37,12 +37,14 @@ Examples:
 """
 
 
+@inline(.nodebug)
 def _embedded_bytes[
     data: __mlir_type.`!kgen.string`
 ]() -> Span[Byte, ImmStaticOrigin]:
     return StringLiteral[data]().as_bytes()
 
 
+@inline(.nodebug)
 def _embedded_string[data: __mlir_type.`!kgen.string`]() -> StaticString:
     # The frontend validated the bytes at the source location of the include.
     return StaticString(data)
