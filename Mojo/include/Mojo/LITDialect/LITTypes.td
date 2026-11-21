@@ -704,4 +704,11 @@ def MagicMLIRTypeType : LITType<"MagicMLIRType", "magic.__mlir_type"> {
   let summary = "Type of the __mlir_type declaration";
 }
 
+// A frontend-only subscript binds a standard-library accessor to the contents
+// of a file named by a string literal at the use site.
+def LIT_FileLiteralType : LITType<"FileLiteral", "file_literal"> {
+  let parameters = (ins "bool":$isText);
+  let assemblyFormat = "`<` $isText `>`";
+}
+
 #endif // KGEN_LITDIALECT_LITTYPES_TD

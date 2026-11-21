@@ -86,7 +86,8 @@ void ModuleNodeOp::build(mlir::OpBuilder &builder, mlir::OperationState &state,
                          mlir::ValueRange deps) {
   build(builder, state, NodeType::get(builder.getContext()),
         builder.getStringAttr(name), builder.getStringAttr(path),
-        /*content_hash=*/mlir::StringAttr{}, deps);
+        /*content_hash=*/mlir::StringAttr{},
+        /*embedded_files=*/mlir::DictionaryAttr{}, deps);
 }
 
 mlir::LogicalResult ModuleNodeOp::verify() {

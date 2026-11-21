@@ -16,6 +16,7 @@
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringExtras.h"
+#include "llvm/Support/FileSystem.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/xxhash.h"
 
@@ -30,6 +31,8 @@ std::string DepGraph::hashModuleBuffer(llvm::StringRef contents) {
 }
 
 std::optional<std::string> DepGraph::defaultFileHasher(llvm::StringRef path) {
+  if (!llvm::sys::fs::is_regular_file(path))
+    return std::nullopt;
   llvm::ErrorOr<std::unique_ptr<llvm::MemoryBuffer>> fileOrErr =
       llvm::MemoryBuffer::getFile(path);
   if (!fileOrErr)
@@ -43,6 +46,15 @@ SourceHashes DepGraph::hashModuleSources(GraphOp graph, HashFn hasher) {
     std::optional<llvm::StringRef> path = mod.getPath();
     if (!path)
       continue;
+    if (auto files = mod.getEmbeddedFilesAttr()) {
+      // Omitting an unverifiable module makes it (and its importers) dirty.
+      if (llvm::any_of(files, [&](mlir::NamedAttribute file) {
+            auto stored = mlir::dyn_cast<mlir::StringAttr>(file.getValue());
+            auto current = hasher(file.getName().getValue());
+            return !stored || !current || stored.getValue() != *current;
+          }))
+        continue;
+    }
     if (std::optional<std::string> hash = hasher(*path))
       hashes.try_emplace(mod.getOperation(), std::move(*hash));
   }

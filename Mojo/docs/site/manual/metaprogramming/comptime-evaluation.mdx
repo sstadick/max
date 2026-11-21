@@ -56,6 +56,18 @@ won't run at compile time:
 - Functions that can
   [raise errors](/docs/manual/functions/#raising-and-non-raising-functions).
 
+To embed a regular file, import `include_string` or `include_bytes` from
+`std.io` and pass a literal path. Relative paths start at the directory of
+the Mojo source file containing the expression. Recompiling that source
+picks up changes to the embedded file.
+
+```mojo
+from std.io import include_bytes, include_string
+
+comptime theme = include_string["theme.css"]()  # UTF-8 StaticString
+comptime icon = include_bytes["icon.png"]()     # Span[Byte, ImmStaticOrigin]
+```
+
 In addition, the compiler can't run functions on the GPU. Compile-time
 functions in GPU code are actually run on the CPU.
 

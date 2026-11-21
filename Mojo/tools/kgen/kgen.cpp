@@ -53,6 +53,8 @@
 #include "mlir/IR/Diagnostics.h"
 #include "mlir/Parser/Parser.h"
 #include "mlir/Support/Timing.h"
+#include "clang/Basic/MakeSupport.h"
+#include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/CodeGen/CommandFlags.h"
 #include "llvm/MC/TargetRegistry.h"
@@ -288,9 +290,18 @@ static LogicalResult createDependencyFile(const CLOptions &clOptions,
     return failure(clOptions.reportError(errorMessage));
 
   // Resolve each of the dependencies and add them to the file.
-  outputFile->os() << clOptions.outputFilename << ":";
-  for (StringRef includeFile : includedFiles)
-    outputFile->os() << ' ' << includeFile;
+  llvm::SmallString<128> escaped;
+  auto writePath = [&](StringRef path) {
+    escaped.clear();
+    clang::quoteMakeTarget(path, escaped);
+    outputFile->os() << escaped;
+  };
+  writePath(clOptions.outputFilename);
+  outputFile->os() << ':';
+  for (StringRef includeFile : includedFiles) {
+    outputFile->os() << ' ';
+    writePath(includeFile);
+  }
 
   outputFile->os() << "\n";
   outputFile->keep();

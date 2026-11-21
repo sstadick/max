@@ -44,6 +44,7 @@
 #include "Mojo/LITDialect/LITOps.h"
 #include "Mojo/LITDialect/LITUtils.h"
 #include "Mojo/LITDialect/SpecialFunctions.h"
+#include "Mojo/MojoParser/ModuleLoader.h"
 #include "Mojo/POPDialect/POPAttrs.h"
 #include "Mojo/POPDialect/POPOps.h"
 #include "Mojo/POPDialect/POPTypes.h"
@@ -63,6 +64,7 @@
 #include "mlir/Support/IndentedOstream.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVectorExtras.h"
+#include "llvm/Support/ConvertUTF.h"
 #include "llvm/Support/SaveAndRestore.h"
 #include <Support/LLVMForwardDecls.h>
 
@@ -762,12 +764,13 @@ static ASTType getArgumentType(IREmitter &emitter, const ExprNode *expr,
   return specializeStruct(bindings, structDecl->getOp(), decl);
 }
 
-/// Look up a t-string entry point and bind the parameters given, in order.
+/// Look up a standard library function and bind its parameters.
 static std::optional<OverloadSet>
-getTStringOverloadSet(IREmitter &emitter, const ExprNode *expr,
-                      StringRef fnName, ArrayRef<AnyValue> params) {
+getStdlibOverloadSet(IREmitter &emitter, const ExprNode *expr,
+                     ArrayRef<StringRef> module, StringRef fnName,
+                     ArrayRef<AnyValue> params) {
   ArrayRef<ASTDecl *> fnDecls = emitter.shared.getBuiltinFunction(
-      emitter.declScope, SharedState::ImportPath(kTStringModule), fnName,
+      emitter.declScope, SharedState::ImportPath(module), fnName,
       expr->getLoc());
   if (fnDecls.empty())
     return std::nullopt;
@@ -862,8 +865,8 @@ AnyValue TStringExprNode::emitIR(ExprDest &dest, IREmitter &emitter) const {
       PValue(StringAttr::get(formatTemplate,
                              KGEN::StringType::get(emitter.getContext()))),
       origin};
-  auto overloadSet =
-      getTStringOverloadSet(emitter, this, "__make_tstring", params);
+  auto overloadSet = getStdlibOverloadSet(emitter, this, kTStringModule,
+                                          "__make_tstring", params);
   if (!overloadSet)
     return fail();
 
@@ -3507,6 +3510,38 @@ auto SubscriptNode::emitLCVIR(ExprDest &dest, IREmitter &emitter,
 
   // If the sub-value is an unbound Type, try binding parameters to it!
   if (Type typeValue = baseValue.getIfTypeValue()) {
+    if (auto file = sugarDynCast<FileLiteralType>(typeValue)) {
+      auto *literal = operands.size() == 1 && operands[0].isPositional()
+                          ? dyn_cast<StringLiteralNode>(operands[0].expr)
+                          : nullptr;
+      if (!literal) {
+        emitter.emitError(lsquareLoc, "expected one literal file path");
+        return {};
+      }
+      std::string path = literal->getValue();
+      auto bytes = emitter.shared.getModuleLoader().readEmbeddedFile(
+          emitter.declScope, literal->getLoc(), path);
+      if (!bytes)
+        return {};
+      if (file.getIsText()) {
+        auto contents = bytes.getValue().bytes();
+        const llvm::UTF8 *cursor = contents.begin();
+        if (!llvm::isLegalUTF8String(&cursor, contents.end())) {
+          emitter.emitError(literal->getLoc(),
+                            "embedded file contains invalid UTF-8: ")
+              << path;
+          return {};
+        }
+      }
+      auto accessor = getStdlibOverloadSet(
+          emitter, this, {"std", "io", "embed"},
+          file.getIsText() ? "_embedded_string" : "_embedded_bytes",
+          {PValue(bytes)});
+      if (!accessor)
+        return {};
+      return emitter.emitResult(OverloadSetUValue::create(std::move(*accessor)),
+                                this, dest);
+    }
     // Handle __mlir_type["foo"] and __mlir_attr["foo"].
     if (sugarIsa<MagicMLIRTypeType>(typeValue)) {
       std::string result = substituteMLIRMagic(*this, emitter);

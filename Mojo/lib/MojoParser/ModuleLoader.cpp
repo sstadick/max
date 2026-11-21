@@ -1498,6 +1498,54 @@ ModuleState &ModuleLoader::createErrorModuleState(SMLoc loc, StringAttr name,
   return *state;
 }
 
+mlir::StringAttr ModuleLoader::readEmbeddedFile(ASTDecl &scope, SMLoc loc,
+                                                StringRef path) {
+  if (path.empty() || path.contains('\0')) {
+    shared.emitError(loc, "expected a nonempty file path without NUL bytes");
+    return {};
+  }
+  auto &sm = shared.getSourceMgr();
+  unsigned id = sm.FindBufferContainingLoc(loc);
+  StringRef source = shared.getWrappedSourcePath(id).value_or(
+      sm.getMemoryBuffer(id)->getBufferIdentifier());
+  std::filesystem::path asset =
+      std::filesystem::path(source.str()).parent_path() / path.str();
+  std::error_code ec;
+  asset = std::filesystem::absolute(asset, ec);
+  if (ec) {
+    shared.emitError(loc, "cannot resolve embedded file: ") << ec.message();
+    return {};
+  }
+
+  std::string filename = asset.string();
+  auto &files = store->embeddedFileContents;
+  auto it = files.find(filename);
+  if (it == files.end()) {
+    if (!std::filesystem::is_regular_file(asset, ec)) {
+      shared.emitError(loc, "cannot read embedded file '")
+          << filename
+          << "': " << (ec ? ec.message() : "expected a regular file");
+      return {};
+    }
+    auto buffer = llvm::MemoryBuffer::getFile(filename, /*IsText=*/false,
+                                              /*RequiresNullTerminator=*/false);
+    if (!buffer) {
+      shared.emitError(loc, "cannot read embedded file '")
+          << filename << "': " << buffer.getError().message();
+      return {};
+    }
+    auto bytes = mlir::StringAttr::get((*buffer)->getBuffer(),
+                                       KGEN::StringType::get(getContext()));
+    it = files.try_emplace(filename, bytes).first;
+    shared.addIncludedFile(filename);
+  }
+  if (shared.isIncrParsingEnabled())
+    if (auto *owner = scope.getNearestDeclOfType<FileModuleASTDecl>())
+      store->embeddedFilePaths[owner].insert(
+          mlir::StringAttr::get(getContext(), it->getKey()));
+  return it->second;
+}
+
 void ModuleLoader::recordDepEdge(ASTDecl *importer, ASTDecl *imported) {
   if (!shared.isIncrParsingEnabled() || !importer || !imported)
     return;
@@ -1567,6 +1615,16 @@ ModuleLoader::buildDepGraph(const ASTDecl *rootDecl) {
         gb, unknownLoc, state->qualifiedName, *state->sourcePath(),
         mlir::ValueRange{});
     node.setContentHashAttr(mlir::StringAttr::get(ctx, *state->contentHash));
+    if (auto paths = store->embeddedFilePaths.find(decl);
+        paths != store->embeddedFilePaths.end()) {
+      SmallVector<mlir::NamedAttribute> files;
+      for (mlir::StringAttr path : paths->second) {
+        auto bytes = store->embeddedFileContents.lookup(path.getValue());
+        files.emplace_back(path, gb.getStringAttr(DepGraph::hashModuleBuffer(
+                                     bytes.getValue())));
+      }
+      node.setEmbeddedFilesAttr(gb.getDictionaryAttr(files));
+    }
     nodeMap[decl] = node;
   }
 

@@ -25,6 +25,7 @@ implement `Writable` to enable their types to work with any `Writer`.
 """
 
 from std.format import Writable, Writer
+from .embed import include_bytes, include_string
 from .error import IOError, IOErrorKind
 from .file import FileHandle
 from .file_descriptor import (
