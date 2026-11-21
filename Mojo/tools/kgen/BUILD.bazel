@@ -55,7 +55,6 @@ modular_cc_binary(
         "//Support:Globals.static",
         "//Support:MArchTarget",
         "//Support:MDialect",
-        "@llvm-project//clang:basic",
         "@llvm-project//mlir:BytecodeWriter",
     ],
 )

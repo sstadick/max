@@ -100,6 +100,12 @@ defm d : CommandOption<["-"], "d", OutputOptionGroup,
   HelpText<"Writes a dependency file for the output to PATH.">>,
   MarshallingInfoString<KGENOpts<"dependencyFilename">>;
 
+def make_3_81_depfile : Flag<["--"], "make-3.81-depfile">,
+  Group<OutputOptionGroup>,
+  HelpText<"With -d, quote prerequisites containing colons for GNU Make 3.81. "
+           "The default uses compiler-style backslash escaping.">,
+  MarshallingInfoFlag<KGENOpts<"make381Depfile">>;
+
 include "Common/NamespaceOptions.td"
 
 def save_temps : Flag<["--", "-"], "save-temps">,

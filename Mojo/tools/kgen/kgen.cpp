@@ -53,7 +53,6 @@
 #include "mlir/IR/Diagnostics.h"
 #include "mlir/Parser/Parser.h"
 #include "mlir/Support/Timing.h"
-#include "clang/Basic/MakeSupport.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/CodeGen/CommandFlags.h"
@@ -128,6 +127,7 @@ struct CLOptions : public CommonOptions {
   TargetArgs targetArgs;
   DriverOptions driverOptions;
   std::string dependencyFilename;
+  bool make381Depfile = false;
   bool emitTextualAsm = false;
   bool ignoreFailures = false;
   /// The `--namespace` that `--precompile` builds the package under, outermost
@@ -267,6 +267,40 @@ static LogicalResult emitModuleIR(ModuleOp theModule, const CLOptions &opts) {
   return mlir::success();
 }
 
+/// Quote a filename in a Make rule. A pipe separates order-only prerequisites,
+/// while a percent introduces a pattern only on the target side.
+static void writeMakePath(raw_ostream &os, StringRef path, bool isTarget,
+                          bool make381Depfile) {
+  llvm::SmallString<128> escaped;
+  // Make 3.81 leaves the escape in a prerequisite spelled "a\:b". A
+  // one-character glob matches the literal colon on both old and new Make.
+  // Quote other glob characters too so the prerequisite names exactly one file.
+  bool useGlob = make381Depfile && !isTarget && path.contains(':');
+  size_t backslashes = 0;
+  for (char c : path) {
+    if (useGlob && StringRef(":\\*?[").contains(c)) {
+      escaped.push_back('[');
+      if (c == ':' || c == '\\')
+        escaped.push_back('\\');
+      escaped.push_back(c);
+      escaped.push_back(']');
+      continue;
+    }
+    if (c == ';') {
+      // Make scans for inline recipes twice. Escape the semicolon and any
+      // preceding backslashes for both scans.
+      escaped.append(3 * (backslashes + 1), '\\');
+    } else if (StringRef(" \t#:").contains(c) || c == (isTarget ? '%' : '|')) {
+      escaped.append(backslashes + 1, '\\');
+    } else if (c == '$') {
+      escaped.push_back('$');
+    }
+    escaped.push_back(c);
+    backslashes = c == '\\' ? backslashes + 1 : 0;
+  }
+  os << escaped;
+}
+
 /// Create a dependency file for the `-d` option.
 ///
 /// This functionality is generally only for the benefit of the build system,
@@ -289,18 +323,13 @@ static LogicalResult createDependencyFile(const CLOptions &clOptions,
   if (!outputFile)
     return failure(clOptions.reportError(errorMessage));
 
-  // Resolve each of the dependencies and add them to the file.
-  llvm::SmallString<128> escaped;
-  auto writePath = [&](StringRef path) {
-    escaped.clear();
-    clang::quoteMakeTarget(path, escaped);
-    outputFile->os() << escaped;
-  };
-  writePath(clOptions.outputFilename);
+  writeMakePath(outputFile->os(), clOptions.outputFilename, /*isTarget=*/true,
+                clOptions.make381Depfile);
   outputFile->os() << ':';
   for (StringRef includeFile : includedFiles) {
     outputFile->os() << ' ';
-    writePath(includeFile);
+    writeMakePath(outputFile->os(), includeFile, /*isTarget=*/false,
+                  clOptions.make381Depfile);
   }
 
   outputFile->os() << "\n";
